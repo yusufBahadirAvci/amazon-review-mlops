@@ -1,0 +1,42 @@
+# Pre-commit hooks for the product-review-classifier (Java 21 / Maven).
+# Setup:   pip install pre-commit && pre-commit install
+# Run all: pre-commit run --all-files
+default_install_hook_types: [pre-commit]
+fail_fast: false
+
+repos:
+  # General hygiene, YAML syntax and large-file guard
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+        # Allow multi-document files (e.g. Kubernetes / Helm manifests)
+        args: [--allow-multiple-documents]
+      - id: check-xml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      # Block files > 5MB; datasets and model binaries must be tracked with DVC
+      - id: check-added-large-files
+        args: [--maxkb=5120]
+
+  # Java formatting (google-java-format; downloads the formatter jar on first run)
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.14.0
+    hooks:
+      - id: pretty-format-java
+        args: [--autofix]
+
+  # Maven compilation check (main + test sources, tests are not executed)
+  - repo: local
+    hooks:
+      - id: maven-compile
+        name: maven test-compile
+        entry: mvn -B -q test-compile
+        language: system
+        pass_filenames: false
+        files: (\.java$|^pom\.xml$)

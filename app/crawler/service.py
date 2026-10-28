@@ -26,18 +26,31 @@ def crawl_url(url: str, db: Session, settings: CrawlerSettings | None = None) ->
     """Download one Amazon reviews page and save its reviews."""
     settings = settings or get_crawler_settings()
     target = parse_amazon_url(url)
+    reviews = parse_reviews(fetch_page(target.url, settings), settings)
+    return _save_reviews(
+        reviews,
+        db=db,
+        settings=settings,
+        source=ReviewSource.CRAWLER_LIVE,
+        source_url=target.url,
+        product_id=target.product_id,
+        marketplace=target.marketplace,
+    )
 
+
+def fetch_page(url: str, settings: CrawlerSettings) -> bytes:
+    """Download a page with the configured user agent; raises on blocks and HTTP errors."""
     # Be polite: never send requests back to back
     time.sleep(settings.delay_seconds)
     try:
         response = requests.get(
-            target.url,
+            url,
             headers={"User-Agent": settings.user_agent},
             timeout=settings.timeout_seconds,
         )
     except requests.RequestException as exc:
         raise CrawlerError(
-            f"Request to {target.marketplace} failed: {exc}",
+            f"Request to {url} failed: {exc}",
             hint="Check the URL and your network connection.",
         ) from exc
 
@@ -48,17 +61,7 @@ def crawl_url(url: str, db: Session, settings: CrawlerSettings | None = None) ->
             f"Amazon returned HTTP {response.status_code}",
             hint="Check that the URL points to an existing reviews page.",
         )
-
-    reviews = parse_reviews(response.content, settings)
-    return _save_reviews(
-        reviews,
-        db=db,
-        settings=settings,
-        source=ReviewSource.CRAWLER_LIVE,
-        source_url=target.url,
-        product_id=target.product_id,
-        marketplace=target.marketplace,
-    )
+    return response.content
 
 
 def import_html(
@@ -113,6 +116,13 @@ def _save_reviews(
 
     seen: set[str] = set()
     for number, review in enumerate(reviews, start=1):
+        if review.text is None:
+            result.skipped_invalid += 1
+            result.warnings.append(
+                f"Review {number}: no element matched the text selector "
+                f"({settings.text_selector!r}), skipped. The page layout may have changed."
+            )
+            continue
         if not review.text:
             result.skipped_invalid += 1
             result.warnings.append(f"Review {number}: empty text, skipped.")

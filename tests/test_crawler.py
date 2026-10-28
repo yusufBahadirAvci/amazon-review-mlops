@@ -56,6 +56,48 @@ def test_reviewer_names_are_not_stored(db, reviews_html, crawler_settings):
         assert "Ahmet Y." not in stored
 
 
+def test_import_current_amazon_tr_layout(db, tr_reviews_html, crawler_settings):
+    url = "https://www.amazon.com.tr/Seker-Portakali/dp/9750738608/ref=s9_acsd?_encoding=UTF8"
+
+    result = import_html(tr_reviews_html, url, db, crawler_settings)
+
+    assert (result.found, result.saved, result.skipped_invalid) == (3, 3, 0)
+    turkish, english, german = db.scalars(select(Review).order_by(Review.id)).all()
+    assert {review.product_id for review in (turkish, english, german)} == {"9750738608"}
+    assert {review.marketplace for review in (turkish, english, german)} == {"amazon.com.tr"}
+    assert (turkish.title, turkish.text, turkish.rating) == (
+        "Güzel",
+        "Ah zeze.. Bu bilinçle okumak çok güzeldi",
+        5,
+    )
+    assert turkish.review_date == "Türkiye’de 19 Ekim 2026 tarihinde değerlendirildi"
+    # Paragraphs are joined; translated reviews keep their original language
+    assert english.text == (
+        "I didn’t like the book because it start from page 18 Before that all pages are missing👎"
+    )
+    assert (english.title, english.rating) == ("Missing page", 1)
+    assert german.title == "Schöne Geschichte, herzzerreißend"
+    assert german.text.startswith("Das Buch ist so schön geschrieben.")
+    for review in (turkish, english, german):
+        # Hidden accessibility text and translation widgets must not leak into the review
+        assert "Full content visible" not in review.text
+        assert "çevir" not in review.text
+
+
+def test_missing_text_element_is_reported(db, crawler_settings):
+    html = """
+        <div data-hook="review">
+            <i data-hook="review-star-rating" class="a-icon a-star-4"></i>
+            <div data-hook="some-future-body">Text in a layout we do not know yet</div>
+        </div>
+    """
+
+    result = import_html(html, None, db, crawler_settings)
+
+    assert (result.found, result.saved, result.skipped_invalid) == (1, 0, 1)
+    assert "text selector" in result.warnings[0]
+
+
 def test_captcha_page_is_detected(captcha_html, crawler_settings):
     with pytest.raises(CrawlerBlockedError) as error:
         parse_reviews(captcha_html, crawler_settings)

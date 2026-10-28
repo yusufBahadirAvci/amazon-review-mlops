@@ -42,10 +42,12 @@ class CrawlerSettings(BaseSettings):
     delay_seconds: float = 2
     max_reviews_per_run: int = 100
 
+    # Comma-separated alternatives cover both the current product-page layout
+    # (reviewTitle, reviewRichContentContainer) and the older reviews-page layout
     review_selector: str = "div[data-hook=review]"
     rating_selector: str = "i[data-hook=review-star-rating], i[data-hook=cmps-review-star-rating]"
-    title_selector: str = "[data-hook=review-title]"
-    text_selector: str = "span[data-hook=review-body]"
+    title_selector: str = "[data-hook=review-title], [data-hook=reviewTitle]"
+    text_selector: str = "[data-hook=reviewRichContentContainer], span[data-hook=review-body]"
     date_selector: str = "span[data-hook=review-date]"
 
 

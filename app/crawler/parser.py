@@ -54,7 +54,8 @@ class AmazonUrl:
 @dataclass(frozen=True)
 class ParsedReview:
     title: str | None
-    text: str
+    # None when the text selector matched nothing, "" when the review body is blank
+    text: str | None
     rating: int | None
     review_date: str | None
 
@@ -112,9 +113,9 @@ def _title(element: Tag | None) -> str:
     return _text(element)
 
 
-def _body(element: Tag | None) -> str:
+def _body(element: Tag | None) -> str | None:
     if element is None:
-        return ""
+        return None
     # Long reviews are wrapped in an expander whose header adds a "Read more" link
     return _text(element.select_one(".a-expander-content") or element)
 

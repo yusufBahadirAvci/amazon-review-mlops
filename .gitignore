@@ -22,6 +22,9 @@ dist/
 ### Mac OS ###
 .DS_Store
 
+### Local debugging output (raw pages may contain reviewer names) ###
+debug/
+
 ### Environment ###
 .env
 !.env.example

@@ -20,6 +20,12 @@ def reviews_html() -> bytes:
 
 
 @pytest.fixture
+def tr_reviews_html() -> bytes:
+    """Current amazon.com.tr product-page layout, trimmed and anonymized."""
+    return (FIXTURES / "amazon-tr-reviews.html").read_bytes()
+
+
+@pytest.fixture
 def captcha_html() -> bytes:
     return (FIXTURES / "amazon-captcha.html").read_bytes()
 

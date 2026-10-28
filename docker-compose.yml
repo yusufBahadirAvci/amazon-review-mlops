@@ -1,0 +1,50 @@
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    restart: unless-stopped
+    environment:
+      # Values come from .env in the project root (see .env.example)
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is not set, copy .env.example to .env}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is not set, copy .env.example to .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set, copy .env.example to .env}
+    ports:
+      # Host port is configurable in case a local PostgreSQL already uses 5432
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # $$ defers expansion to the container shell, which has the variables above
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlops-network
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.11.1
+    container_name: mlflow-server
+    restart: unless-stopped
+    # Run from /mlflow so the relative SQLite file (mlflow.db) lands in the persistent volume
+    working_dir: /mlflow
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    networks:
+      - mlops-network
+
+volumes:
+  postgres_data:
+  mlflow_data:
+
+networks:
+  mlops-network:
+    driver: bridge

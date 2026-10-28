@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeEditorTabs">
-    <option name="activeSessionId" value="cc1048e6-2c97-4970-847a-7a679371d01a" />
+    <option name="activeSessionId" value="0a48debb-4364-4360-8b53-b2ec2a21aee7" />
     <option name="openSessionIds">
       <list>
         <option value="cc1048e6-2c97-4970-847a-7a679371d01a" />
+        <option value="0a48debb-4364-4360-8b53-b2ec2a21aee7" />
       </list>
     </option>
     <option name="sessionPaths">
       <map>
-        <entry key="cc1048e6-2c97-4970-847a-7a679371d01a" value="/sessions/17ee0164-c458-4e8a-8e2d-d8d0375eb59f" />
+        <entry key="0a48debb-4364-4360-8b53-b2ec2a21aee7" value="/sessions/3ff4b3a4-e1bd-430c-81b4-e4ebf462f511" />
+        <entry key="cc1048e6-2c97-4970-847a-7a679371d01a" value="/switch-account" />
       </map>
     </option>
     <option name="sessionTitles">
       <map>
-        <entry key="cc1048e6-2c97-4970-847a-7a679371d01a" value="Pre-commit configuration for Java sentiment project" />
+        <entry key="0a48debb-4364-4360-8b53-b2ec2a21aee7" value="Java to Python migration" />
+        <entry key="cc1048e6-2c97-4970-847a-7a679371d01a" value="AmazonReviewScraperService Jsoup crawler" />
       </map>
     </option>
   </component>

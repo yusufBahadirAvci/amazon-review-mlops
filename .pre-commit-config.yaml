@@ -1,5 +1,5 @@
-# Pre-commit hooks for the product-review-classifier (Java 21 / Maven).
-# Setup:   pip install pre-commit && pre-commit install
+# Pre-commit hooks for the product-review-classifier (Python).
+# Setup:   pip install pre-commit && pre-commit install (with .venv activated)
 # Run all: pre-commit run --all-files
 default_install_hook_types: [pre-commit]
 fail_fast: false
@@ -26,19 +26,20 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=5120]
 
-  # Java formatting (google-java-format; downloads the formatter jar on first run)
-  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-    rev: v2.14.0
+  # Python lint (with autofix) and formatting; keep rev in sync with ruff in requirements.txt
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
     hooks:
-      - id: pretty-format-java
-        args: [--autofix]
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
 
-  # Maven compilation check (main + test sources, tests are not executed)
+  # Test suite; runs pytest from the active virtual environment
   - repo: local
     hooks:
-      - id: maven-compile
-        name: maven test-compile
-        entry: ./mvnw -B -q test-compile
+      - id: pytest
+        name: pytest
+        entry: pytest -q
         language: system
         pass_filenames: false
-        files: (\.java$|^pom\.xml$)
+        types: [python]

@@ -11,12 +11,12 @@ No tool or language restrictions from the professor; the result is what matters.
 ## 2. Decisions already made
 - Language: Python 3.12.10 (Java version kept on branch "java-backup", do not use it).
 - IDE: PyCharm, plus Claude Code inside the IDE.
-- Database: PostgreSQL 15 in Docker. MLflow server v2.11.1 in Docker (port 5000). Both in docker-compose.yml.
+- Database: PostgreSQL 15 in Docker. MLflow server v2.22.4 in Docker (port 5000). Both in docker-compose.yml.
 - Secrets: .env (never committed); .env.example shows the keys. Default DB port 5432 (Bahadır uses 5433 in his own .env).
 - Code quality: pre-commit with ruff (lint + format) and pytest.
 - Web API: FastAPI.
 - Crawler: requests + BeautifulSoup, live mode + fallback mode parsing a saved HTML page (we do NOT bypass Amazon's bot blocking).
-- pandas is pinned to 2.2.3 because mlflow 2.11.1 does not support pandas 3.
+- pandas is pinned to 2.2.3 because mlflow 2.x does not support pandas 3.
 
 ## 3. Architecture (5 stages)
 1. SETUP: GitHub repo, Docker Compose, pre-commit, Python skeleton.
@@ -38,7 +38,7 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - MLflow tracking URI: http://localhost:5000, read from the environment variable MLFLOW_TRACKING_URI.
 - Crawled reviews: PostgreSQL table "reviews" with columns including text, rating, source, marketplace, crawled_at. The drift analysis reads from this table.
 - Start with a simple, fast model (TF-IDF + LogisticRegression or LinearSVC, tuned by Optuna).
-- Client version pinned to match the server: mlflow==2.11.1.
+- Client version pinned to match the server: mlflow==2.22.4.
 
 ## 6. Git workflow
 - Never push directly to main. Work on own branches, merge through Pull Requests.
@@ -54,11 +54,11 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - requirements.txt: evidently 0.7.23 pulled protobuf 7, so protobuf is pinned to 4.25.9 and opentelemetry-proto to 1.27.0 (mlflow 2.11.1 needs protobuf<5). This is the 3rd conflict caused by the old mlflow 2.11.1; consider upgrading MLflow server + client together.
 - Update (Ceylin, branch "monitoring"): drift_detected now uses only TRIGGER_COLUMNS (text_length, word_count). rating and prediction are reported as info only, because the balanced training data always differs from real reviews. Per-column scores are in the JSON ("column_drift") and in MLflow (drift_score_<column>). p-value tests (small samples) are handled: drift if p < threshold. Added 19 tests (tests/test_data_pipeline.py, test_training.py, test_drift.py; new files only); 64 tests pass in total.
 - DVC remote (Ceylin): DagsHub repo "ceylinkucuk/amazon-review-mlops-data", remote name "dagshub" (default), URL https://dagshub.com/ceylinkucuk/amazon-review-mlops-data.dvc. Data is pushed (dvc push). Credentials are set per person with "dvc remote modify dagshub --local ..." (stored in .dvc/config.local, never committed). To get the data: be added as a collaborator on the DagsHub repo, set your own token locally, then "dvc pull".
-
 - Done (Bahadır, 29 Oct): no Turkish in the project. The crawler accepts only English marketplaces (amazon.com, amazon.co.uk, amazon.ca, amazon.com.au, amazon.in; others get 400), parses ratings from the star CSS class or the English "x out of 5 stars" label only, and skips translated reviews and "reviews from other countries" with a warning (new counter skipped_foreign). Turkish test fixture removed.
+- MLflow upgraded (Ceylin, branch "chore/mlflow-upgrade"): server image and client 2.11.1 -> 2.22.4 (v2.22.5 has no Docker image). Tested first in a separate venv + temporary server: pip check clean, 76 tests pass, training, contract test and drift work, and a model logged with 2.11.1 still loads. Removed pins: setuptools, protobuf, opentelemetry-proto, virtualenv; pytest back to 9.2.0; pandas stays 2.2.3. Server DB migrated with "mlflow db upgrade" after a volume backup. Retrained: version 3 (same F1 0.7001) set as production manually because the promotion rule needs a strictly better score.
 - Done (Bahadır, 29 Oct): POST /api/predict ({"texts": [...]}, 1-100 texts, max 5000 chars each -> {"predictions": [...], "model_version": "..."}) loads models:/sentiment-model@production once at startup (MLFLOW_TRACKING_URI, MODEL_URI settings); POST /api/model/reload reloads it for auto-retrain (a failed reload keeps the old model); /health shows "model" and "model_version". If MLflow is down the app still starts and /predict returns 503.
-
-- Not started: Dockerfile, CI/CD, Prometheus, /predict, auto-retrain.
+- Done (Bahadır, 29 Oct): Docker + CI. Multi-stage Dockerfile (python:3.12-slim, non-root, uvicorn on 8000) installs requirements-api.txt (API runtime packages, no versions) with "-c requirements.txt", so all versions still come from requirements.txt. New "api" service in docker-compose.yml (talks to postgres-db:5432 and http://mlflow-server:5000 inside Docker, waits up to 60 s for MLflow at startup, healthcheck on /health): "docker compose up -d --build" -> http://localhost:8000. GitHub Actions (.github/workflows/ci.yml) on PRs and pushes to main: ruff, ruff format --check, pytest, docker build; on main it also pushes ghcr.io/yusufbahadiravci/amazon-review-mlops.
+- Not started: Prometheus; auto-retrain trigger (scheduler). The auto-retrain script is on branch "feature/auto-retrain".
 
 ## 8. Next tasks
 Ceylin: Great Expectations checks (branch "data-dvc"), then training script with Optuna + MLflow (branch "training").

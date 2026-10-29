@@ -1,0 +1,12 @@
+# Keep the build context small and never send secrets or local data to Docker
+.venv
+.git
+.env
+data/raw
+monitoring/reports
+mlruns
+.idea
+**/__pycache__
+.pytest_cache
+.ruff_cache
+tests

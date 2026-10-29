@@ -76,11 +76,17 @@ class FakeModelLoader:
     def __init__(self, model: object) -> None:
         self.model = model
         self.calls = 0
+        self.attempts = 0
         self.fail = False
+        # Fail only the next N attempts, with this error
+        self.fail_times = 0
+        self.error: Exception = ConnectionError("MLflow is not reachable")
 
     def __call__(self, settings: ModelSettings) -> LoadedModel:
-        if self.fail:
-            raise ConnectionError("MLflow is not reachable")
+        self.attempts += 1
+        if self.fail or self.fail_times > 0:
+            self.fail_times -= 1
+            raise self.error
         self.calls += 1
         return LoadedModel(self.model, str(self.calls), f"models:/sentiment-model/{self.calls}")
 

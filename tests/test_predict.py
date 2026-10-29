@@ -5,7 +5,7 @@ import pytest
 import requests
 
 from app.config import ModelSettings
-from app.ml_model import ModelUnavailableError, load_from_mlflow
+from app.ml_model import ModelUnavailableError, load_at_startup, load_from_mlflow
 
 REVIEWS = [
     "I love it, great quality.",
@@ -102,7 +102,7 @@ def test_failed_reload_keeps_serving_previous_model(api_client, loaded, model_lo
     response = api_client.post("/api/model/reload")
 
     assert response.status_code == 503
-    assert "ConnectionError" in response.json()["error"]
+    assert "MLflow is not reachable" in response.json()["error"]
     prediction = api_client.post("/api/predict", json={"texts": REVIEWS})
     assert (prediction.status_code, prediction.json()["model_version"]) == (200, "1")
 
@@ -114,6 +114,47 @@ def test_failed_load_raises_and_leaves_store_empty(model_store, model_loader, mo
         model_store.load(model_settings)
 
     assert model_store.current is None
+
+
+def test_startup_waits_for_mlflow_to_come_up(model_store, model_loader):
+    model_loader.fail_times = 2
+    sleeps = []
+    settings = ModelSettings(_env_file=None, model_startup_wait_seconds=60)
+
+    loaded = load_at_startup(model_store, settings, sleep=sleeps.append)
+
+    assert loaded is not None
+    assert model_loader.attempts == 3
+    assert sleeps == [5, 5]
+
+
+def test_startup_gives_up_after_the_wait(model_store, model_loader):
+    model_loader.fail = True
+    sleeps = []
+    settings = ModelSettings(_env_file=None, model_startup_wait_seconds=12)
+
+    assert load_at_startup(model_store, settings, sleep=sleeps.append) is None
+    assert model_loader.attempts == 3
+    assert sleeps == [5, 5]
+    assert model_store.current is None
+
+
+def test_startup_does_not_retry_a_missing_model(model_store, model_loader):
+    model_loader.fail = True
+    model_loader.error = LookupError("Registered model alias production not found")
+    sleeps = []
+    settings = ModelSettings(_env_file=None, model_startup_wait_seconds=60)
+
+    assert load_at_startup(model_store, settings, sleep=sleeps.append) is None
+    assert (model_loader.attempts, sleeps) == (1, [])
+
+
+def test_startup_tries_once_by_default(model_store, model_loader, model_settings):
+    model_loader.fail = True
+    sleeps = []
+
+    assert load_at_startup(model_store, model_settings, sleep=sleeps.append) is None
+    assert (model_loader.attempts, sleeps) == (1, [])
 
 
 class FakeVersion:

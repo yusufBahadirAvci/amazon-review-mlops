@@ -25,17 +25,18 @@ def test_import_saves_valid_reviews_and_skips_empty_body(db, reviews_html, crawl
         1,
         0,
     )
-    english, turkish = db.scalars(select(Review).order_by(Review.id)).all()
-    assert english.product_id == "B000TEST01"
-    assert english.marketplace == "amazon.com"
-    assert english.source == ReviewSource.CRAWLER_HTML_FILE
-    assert english.rating == 4
-    assert english.title == "Solid build, average battery"
-    assert english.text == "Works well for daily use. Battery lasts about a day."
-    assert english.review_date == "Reviewed in the United States on March 3, 2025"
-    assert turkish.rating == 3
-    assert turkish.title == "Fiyatına göre iyi"
-    assert len(english.content_hash) == 64
+    first, second = db.scalars(select(Review).order_by(Review.id)).all()
+    assert first.product_id == "B000TEST01"
+    assert first.marketplace == "amazon.com"
+    assert first.source == ReviewSource.CRAWLER_HTML_FILE
+    assert first.rating == 4
+    assert first.title == "Solid build, average battery"
+    assert first.text == "Works well for daily use. Battery lasts about a day."
+    assert first.review_date == "Reviewed in the United States on March 3, 2025"
+    assert len(first.content_hash) == 64
+    assert (second.rating, second.title) == (3, "Good for the price")
+    assert second.text == "Shipping was fast but the box was a bit dented."
+    assert second.review_date == "Reviewed in the United States on January 12, 2025"
 
 
 def test_second_import_skips_duplicates(db, reviews_html, crawler_settings):
@@ -53,35 +54,89 @@ def test_reviewer_names_are_not_stored(db, reviews_html, crawler_settings):
     for review in db.scalars(select(Review)):
         stored = " ".join(str(value) for value in vars(review).values())
         assert "Jane Doe" not in stored
-        assert "Ahmet Y." not in stored
+        assert "Alex P." not in stored
 
 
-def test_import_current_amazon_tr_layout(db, tr_reviews_html, crawler_settings):
-    url = "https://www.amazon.com.tr/Seker-Portakali/dp/9750738608/ref=s9_acsd?_encoding=UTF8"
+def current_layout_review(text: str, *, lang: str = "en-US", extra: str = "") -> str:
+    """One review in the current product-page layout (reviewTitle, reviewRichContentContainer)."""
+    return f"""
+        <div data-hook="review">
+            <i data-hook="review-star-rating" class="a-icon a-icon-star a-star-2">
+                <span class="a-icon-alt">2.0 out of 5 stars</span>
+            </i>
+            <a href="#"><h5 data-hook="reviewTitle" lang="{lang}">Pages missing</h5></a>
+            <span data-hook="review-date">Reviewed in the United States on May 2, 2026</span>
+            <div data-hook="reviewText">
+                <div class="a-teaser-describedby-expanded a-hidden">
+                    Full content visible, double tap to read brief content.
+                </div>
+                <div data-hook="reviewRichContentContainer" lang="{lang}">
+                    <p><span>{text}</span></p><p><span>Second paragraph.</span></p>
+                </div>
+            </div>
+            {extra}
+        </div>
+    """
 
-    result = import_html(tr_reviews_html, url, db, crawler_settings)
 
-    assert (result.found, result.saved, result.skipped_invalid) == (3, 3, 0)
-    turkish, english, german = db.scalars(select(Review).order_by(Review.id)).all()
-    assert {review.product_id for review in (turkish, english, german)} == {"9750738608"}
-    assert {review.marketplace for review in (turkish, english, german)} == {"amazon.com.tr"}
-    assert (turkish.title, turkish.text, turkish.rating) == (
-        "Güzel",
-        "Ah zeze.. Bu bilinçle okumak çok güzeldi",
-        5,
+def test_import_current_layout(db, crawler_settings):
+    html = current_layout_review("The book starts at page 18.")
+
+    result = import_html(html, PRODUCT_URL, db, crawler_settings)
+
+    assert (result.found, result.saved, result.skipped_foreign) == (1, 1, 0)
+    review = db.scalars(select(Review)).one()
+    assert (review.title, review.rating) == ("Pages missing", 2)
+    # Paragraphs are joined; hidden accessibility text must not leak into the review
+    assert review.text == "The book starts at page 18. Second paragraph."
+
+
+@pytest.mark.parametrize(
+    ("html", "reason"),
+    [
+        (
+            current_layout_review(
+                "Translated text.",
+                extra='<div data-hook="translateButton"><a href="#">Translate review</a></div>',
+            ),
+            "translated",
+        ),
+        (
+            current_layout_review(
+                "Shown as translated.",
+                extra='<div data-hook="translationInfo">Translated from French by Amazon</div>',
+            ),
+            "translated",
+        ),
+        (
+            '<div id="cm-cr-global-review-list"><h3>Top reviews from other countries</h3>'
+            + current_layout_review("Written in another country.")
+            + "</div>",
+            "other countries",
+        ),
+        (current_layout_review("Texto en otro idioma.", lang="es-MX"), "not in English"),
+    ],
+)
+def test_translated_and_foreign_reviews_are_skipped(db, crawler_settings, html, reason):
+    result = import_html(html, PRODUCT_URL, db, crawler_settings)
+
+    assert (result.found, result.saved, result.skipped_foreign) == (1, 0, 1)
+    assert reason in result.warnings[0]
+    assert db.scalars(select(Review)).all() == []
+
+
+def test_foreign_reviews_do_not_block_local_ones(db, reviews_html, crawler_settings):
+    foreign = '<div id="cm-cr-global-review-list">' + current_layout_review("Abroad.") + "</div>"
+    html = reviews_html.decode().replace("</body>", foreign + "</body>")
+
+    result = import_html(html, PRODUCT_URL, db, crawler_settings)
+
+    assert (result.found, result.saved, result.skipped_invalid, result.skipped_foreign) == (
+        4,
+        2,
+        1,
+        1,
     )
-    assert turkish.review_date == "Türkiye’de 19 Ekim 2026 tarihinde değerlendirildi"
-    # Paragraphs are joined; translated reviews keep their original language
-    assert english.text == (
-        "I didn’t like the book because it start from page 18 Before that all pages are missing👎"
-    )
-    assert (english.title, english.rating) == ("Missing page", 1)
-    assert german.title == "Schöne Geschichte, herzzerreißend"
-    assert german.text.startswith("Das Buch ist so schön geschrieben.")
-    for review in (turkish, english, german):
-        # Hidden accessibility text and translation widgets must not leak into the review
-        assert "Full content visible" not in review.text
-        assert "çevir" not in review.text
 
 
 def test_missing_text_element_is_reported(db, crawler_settings):
@@ -161,8 +216,10 @@ def test_live_crawl_sends_only_the_configured_user_agent(
 @pytest.mark.parametrize(
     ("url", "marketplace", "product_id"),
     [
-        ("https://www.amazon.com.tr/dp/B0ABCDEFGH?th=1", "amazon.com.tr", "B0ABCDEFGH"),
-        ("http://amazon.de/gp/product/B0ABCDEFGH/", "amazon.de", "B0ABCDEFGH"),
+        ("https://www.amazon.com/dp/B0ABCDEFGH?th=1", "amazon.com", "B0ABCDEFGH"),
+        ("http://amazon.ca/gp/product/B0ABCDEFGH/", "amazon.ca", "B0ABCDEFGH"),
+        ("https://www.amazon.com.au/product-reviews/B0ABCDEFGH", "amazon.com.au", "B0ABCDEFGH"),
+        ("https://www.amazon.in/dp/B0ABCDEFGH", "amazon.in", "B0ABCDEFGH"),
         ("https://www.amazon.co.uk/some-product", "amazon.co.uk", None),
     ],
 )
@@ -180,8 +237,13 @@ def test_parse_amazon_url(url, marketplace, product_id):
         "https://amazon.com.evil.example/dp/B0ABCDEFGH",
         "https://www.amazon.com@evil.example/dp/B0ABCDEFGH",
         "not a url",
+        # Non-English marketplaces
+        "https://www.amazon.com.tr/dp/B0ABCDEFGH",
+        "https://www.amazon.de/dp/B0ABCDEFGH",
+        "https://www.amazon.fr/dp/B0ABCDEFGH",
+        "https://www.amazon.co.jp/dp/B0ABCDEFGH",
     ],
 )
-def test_rejects_non_amazon_urls(url):
+def test_rejects_unsupported_urls(url):
     with pytest.raises(InvalidCrawlInputError):
         parse_amazon_url(url)

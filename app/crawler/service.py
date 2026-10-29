@@ -19,6 +19,8 @@ class CrawlResult:
     saved: int = 0
     skipped_invalid: int = 0
     skipped_duplicate: int = 0
+    # Translated reviews and reviews from other countries (we store English originals only)
+    skipped_foreign: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -116,6 +118,10 @@ def _save_reviews(
 
     seen: set[str] = set()
     for number, review in enumerate(reviews, start=1):
+        if review.skip_reason is not None:
+            result.skipped_foreign += 1
+            result.warnings.append(f"Review {number}: {review.skip_reason}, skipped.")
+            continue
         if review.text is None:
             result.skipped_invalid += 1
             result.warnings.append(

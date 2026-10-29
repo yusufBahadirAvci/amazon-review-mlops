@@ -14,7 +14,8 @@ psycopg2-binary==2.9.13
 pydantic-settings==2.16.2
 
 # Testing and linting
-pytest==9.2.0
+pytest==8.3.5
+virtualenv==20.29.3
 httpx==0.28.1
 ruff==0.17.3
 pre-commit==4.7.0
@@ -24,3 +25,9 @@ pandas==2.2.3
 huggingface_hub==2.3.0
 dvc==3.67.1
 great_expectations==1.24.1
+
+# Training (Ceylin)
+mlflow==2.11.1
+scikit-learn==1.9.1
+optuna==5.0.0
+setuptools==80.9.0  # mlflow 2.11.1 needs pkg_resources

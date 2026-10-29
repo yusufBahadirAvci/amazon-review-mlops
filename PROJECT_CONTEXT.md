@@ -48,7 +48,9 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - Done (Bahadır, on main): Python skeleton (FastAPI /health, routes, DB models), crawler (parser, rating, service, tests with saved Amazon / amazon.com.tr / captcha pages).
 - Done (Ceylin, branch "data-dvc", PR #2 open): data/download_data.py builds data/raw/amazon_reviews.csv — 30,000 reviews from 10 product categories (All_Beauty, Amazon_Fashion, Appliances, Baby_Products, Cell_Phones_and_Accessories, Electronics, Home_and_Kitchen, Office_Products, Sports_and_Outdoors, Toys_and_Games), 1,000 per class per category, sampled from the first 100k reviews of each category, RANDOM_SEED=42. Columns: text, rating, label, category, source. Tracked with DVC (no DVC remote yet; regenerate with: python data/download_data.py).
 - Dropped: Cleanlab/amazon-reviews (no star ratings, no neutral class) and a Turkish dataset.
-- Not started: Great Expectations, training, Dockerfile, CI/CD, Prometheus, Evidently, auto-retrain.
+- Done (Ceylin, branch "training"): data/validate_data.py (Great Expectations, 10 checks) and training/train.py (TF-IDF + LogisticRegression/LinearSVC, 20 Optuna trials, experiment "sentiment-training"). "sentiment-model" version 2 is "production": test macro F1 0.70 (neutral 0.59 is the weakest class). Contract test with mlflow.pyfunc.load_model("models:/sentiment-model@production") passes.
+- Changed shared files: docker-compose.yml uses --artifacts-destination (models are uploaded to the server); requirements.txt pins pytest 8.3.5, virtualenv 20.29.3 and setuptools 80.9.0 because mlflow 2.11.1 needs packaging<24 and pkg_resources.
+- Not started: Dockerfile, CI/CD, Prometheus, /predict, Evidently, auto-retrain.
 
 ## 8. Next tasks
 Ceylin: Great Expectations checks (branch "data-dvc"), then training script with Optuna + MLflow (branch "training").

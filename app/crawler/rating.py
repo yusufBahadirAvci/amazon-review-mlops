@@ -3,19 +3,15 @@ import re
 
 from bs4 import Tag
 
-# "a-star-4", "a-star-4-5" (4.5), "a-star-medium-4"; the same in every marketplace language
+# "a-star-4", "a-star-4-5" (4.5), "a-star-medium-4"; independent of the page language
 _STAR_CLASS = re.compile(r"^a-star-(?:[a-z]+-)?(\d)(?:-(\d))?$")
 
-_NUMBER = r"(\d+(?:[.,]\d+)?)"
-_LABEL_PATTERNS = (
-    re.compile(_NUMBER + r"\s+out\s+of\s+5\b", re.IGNORECASE),  # 4.0 out of 5 stars
-    re.compile(_NUMBER + r"\s+von\s+5\b", re.IGNORECASE),  # 4,0 von 5 Sternen
-    re.compile(r"\b5\s+yıldız\s+üzerinden\s+" + _NUMBER, re.IGNORECASE),  # 5 yıldız üzerinden 4,0
-)
+# "4.0 out of 5 stars"
+_ENGLISH_LABEL = re.compile(r"(\d+(?:\.\d+)?)\s+out\s+of\s+5\b", re.IGNORECASE)
 
 
 def parse_rating(element: Tag | None) -> int | None:
-    """Rating from a star icon: the CSS class first, the text label as a fallback.
+    """Rating from a star icon: the CSS class first, the English text label as a fallback.
 
     The result is not range-checked; callers decide what counts as a valid rating.
     """
@@ -31,12 +27,10 @@ def parse_rating(element: Tag | None) -> int | None:
 
 
 def parse_rating_label(label: str) -> int | None:
-    """Rating from a label such as "4.0 out of 5 stars"; accepts dot and comma decimals."""
-    label = label.replace("\xa0", " ")
-    for pattern in _LABEL_PATTERNS:
-        match = pattern.search(label)
-        if match:
-            return _round_half_up(float(match.group(1).replace(",", ".")))
+    """Rating from an English label such as "4.0 out of 5 stars"."""
+    match = _ENGLISH_LABEL.search(label.replace("\xa0", " "))
+    if match:
+        return _round_half_up(float(match.group(1)))
     return None
 
 

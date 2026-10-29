@@ -3,6 +3,7 @@
 import logging
 import re
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -81,6 +82,13 @@ class ModelStore:
         with self._lock:
             try:
                 loaded = self._loader(settings)
+            except ConnectionError as exc:
+                # Expected while MLflow is down; a traceback would add nothing
+                logger.warning("Could not load model %s: %s", settings.model_uri, exc)
+                raise ModelUnavailableError(
+                    f"Could not load the model {settings.model_uri}: MLflow is not reachable",
+                    hint=_unavailable_hint(settings),
+                ) from exc
             except Exception as exc:  # MLflow raises many unrelated exception types
                 logger.exception(
                     "Could not load model %s from %s",
@@ -102,6 +110,35 @@ class ModelStore:
                 "The sentiment model is not loaded", hint=_unavailable_hint(settings)
             )
         return current
+
+
+def load_at_startup(
+    store: ModelStore,
+    settings: ModelSettings,
+    *,
+    retry_interval_seconds: float = 5,
+    sleep: Callable[[float], None] = time.sleep,
+) -> LoadedModel | None:
+    """Load the model; retry only while MLflow is unreachable, never for a missing model.
+
+    Returns None when the model stays unavailable; the app keeps running and
+    POST /api/model/reload can load it later.
+    """
+    attempts = int(settings.model_startup_wait_seconds // retry_interval_seconds) + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            return store.load(settings)
+        except ModelUnavailableError as exc:
+            if not isinstance(exc.__cause__, ConnectionError) or attempt == attempts:
+                return None
+            logger.warning(
+                "MLflow is not reachable yet; retrying in %.0f s (attempt %d of %d)",
+                retry_interval_seconds,
+                attempt,
+                attempts,
+            )
+            sleep(retry_interval_seconds)
+    return None
 
 
 def _unavailable_hint(settings: ModelSettings) -> str:

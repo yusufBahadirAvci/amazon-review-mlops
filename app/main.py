@@ -11,7 +11,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import get_model_settings
 from app.crawler import CrawlerBlockedError, CrawlerError, InvalidCrawlInputError
 from app.db import Base, database_is_up, engine
-from app.ml_model import ModelStore, ModelUnavailableError, get_model_store, model_store
+from app.ml_model import (
+    ModelStore,
+    ModelUnavailableError,
+    get_model_store,
+    load_at_startup,
+    model_store,
+)
 from app.prediction import router as prediction_router
 from app.routes import router
 
@@ -25,11 +31,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     except SQLAlchemyError:
         # Keep serving so /health can report the database as down
         logger.exception("Could not create database tables; is PostgreSQL running?")
-    try:
-        model_store.load(get_model_settings())
-    except ModelUnavailableError:
-        # Already logged; /api/predict answers 503 until POST /api/model/reload succeeds
-        pass
+    # Failures are logged; /api/predict answers 503 until POST /api/model/reload succeeds
+    load_at_startup(model_store, get_model_settings())
     yield
 
 

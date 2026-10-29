@@ -41,6 +41,37 @@ services:
     networks:
       - mlops-network
 
+  api:
+    build: .
+    image: amazon-review-mlops-api
+    container_name: api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Inside Docker the services talk over mlops-network; these override .env,
+      # whose POSTGRES_PORT is the host port (e.g. 5433) and does not apply here
+      POSTGRES_HOST: postgres-db
+      POSTGRES_PORT: "5432"
+      MLFLOW_TRACKING_URI: http://mlflow-server:5000
+      # mlflow-server has no healthcheck, so give it time to start before giving up
+      MODEL_STARTUP_WAIT_SECONDS: "60"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      mlflow-server:
+        condition: service_started
+    healthcheck:
+      # The slim image has no curl; /health answers 503 when the database is down
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - mlops-network
+
 volumes:
   postgres_data:
   mlflow_data:

@@ -1,0 +1,26 @@
+# Runtime packages for the API image only (no training, data or test tools).
+# No versions here: always install with the main file as constraints, so every
+# version comes from requirements.txt:
+#   pip install -r requirements-api.txt -c requirements.txt
+
+# Web API
+fastapi
+uvicorn
+python-multipart
+
+# Crawler
+requests
+beautifulsoup4
+lxml
+
+# Database and configuration
+sqlalchemy
+psycopg2-binary
+pydantic-settings
+
+# Model serving: the MLflow client loads the scikit-learn pipeline.
+# Constraints also apply to dependencies of these (e.g. protobuf for mlflow).
+mlflow
+scikit-learn
+pandas
+setuptools

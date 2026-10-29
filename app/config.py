@@ -67,6 +67,9 @@ class ModelSettings(BaseSettings):
 
     mlflow_tracking_uri: str = "http://localhost:5000"
     model_uri: str = "models:/sentiment-model@production"
+    # At startup, keep retrying this long while MLflow is unreachable (it may still be
+    # starting, e.g. in Docker Compose); 0 means a single attempt
+    model_startup_wait_seconds: float = 0
 
 
 @lru_cache

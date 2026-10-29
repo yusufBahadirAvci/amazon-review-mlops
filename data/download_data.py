@@ -37,6 +37,7 @@ SAMPLES_PER_CLASS_PER_CATEGORY = 1_000  # 10 categories x 3 classes x 1000 = 30k
 MAX_LINES_PER_CATEGORY = 100_000
 RANDOM_SEED = 42
 OUTPUT_PATH = Path(__file__).resolve().parent / "raw" / "amazon_reviews.csv"
+NA_LIKE_TEXTS = {"n/a", "na", "nan", "null", "none", "-", "."}
 
 
 def rating_to_label(rating: int) -> str:
@@ -68,6 +69,7 @@ def clean_reviews(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=["rating", "text"]).copy()
     df["text"] = df["text"].astype(str).str.replace("<br />", " ", regex=False).str.strip()
     df = df[df["text"] != ""]
+    df = df[~df["text"].str.lower().isin(NA_LIKE_TEXTS)]
     df = df.drop_duplicates(subset="text")
     df["rating"] = df["rating"].astype(int)
     df["label"] = df["rating"].apply(rating_to_label)

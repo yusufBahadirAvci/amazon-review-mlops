@@ -23,3 +23,4 @@ pre-commit==4.7.0
 pandas==2.2.3
 huggingface_hub==2.3.0
 dvc==3.67.1
+great_expectations==1.24.1

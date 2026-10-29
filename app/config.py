@@ -58,9 +58,25 @@ class CrawlerSettings(BaseSettings):
     foreign_section_selector: str = "#cm-cr-global-review-list"
 
 
+class ModelSettings(BaseSettings):
+    """Where the sentiment model comes from (contract: PROJECT_CONTEXT.md section 5)."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", protected_namespaces=()
+    )
+
+    mlflow_tracking_uri: str = "http://localhost:5000"
+    model_uri: str = "models:/sentiment-model@production"
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+@lru_cache
+def get_model_settings() -> ModelSettings:
+    return ModelSettings()
 
 
 @lru_cache

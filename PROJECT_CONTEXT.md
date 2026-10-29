@@ -56,6 +56,7 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - DVC remote (Ceylin): DagsHub repo "ceylinkucuk/amazon-review-mlops-data", remote name "dagshub" (default), URL https://dagshub.com/ceylinkucuk/amazon-review-mlops-data.dvc. Data is pushed (dvc push). Credentials are set per person with "dvc remote modify dagshub --local ..." (stored in .dvc/config.local, never committed). To get the data: be added as a collaborator on the DagsHub repo, set your own token locally, then "dvc pull".
 
 - Done (Bahadır, 29 Oct): no Turkish in the project. The crawler accepts only English marketplaces (amazon.com, amazon.co.uk, amazon.ca, amazon.com.au, amazon.in; others get 400), parses ratings from the star CSS class or the English "x out of 5 stars" label only, and skips translated reviews and "reviews from other countries" with a warning (new counter skipped_foreign). Turkish test fixture removed.
+- Done (Bahadır, 29 Oct): POST /api/predict ({"texts": [...]}, 1-100 texts, max 5000 chars each -> {"predictions": [...], "model_version": "..."}) loads models:/sentiment-model@production once at startup (MLFLOW_TRACKING_URI, MODEL_URI settings); POST /api/model/reload reloads it for auto-retrain (a failed reload keeps the old model); /health shows "model" and "model_version". If MLflow is down the app still starts and /predict returns 503.
 
 - Not started: Dockerfile, CI/CD, Prometheus, /predict, auto-retrain.
 

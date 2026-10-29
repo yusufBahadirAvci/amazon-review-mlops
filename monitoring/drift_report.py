@@ -1,9 +1,15 @@
 """Data drift report with Evidently.
 
 Compares the training data (reference) with new reviews (current) on:
-- text_length, word_count  (how people write)
+- text_length, word_count  (how people write: the model's input)
 - rating                   (star distribution)
 - prediction               (what the production model predicts)
+
+Trigger vs. information columns:
+- drift_detected looks ONLY at TRIGGER_COLUMNS (text_length, word_count).
+- rating and prediction are reported for information only. The training data
+  is balanced on purpose while real reviews are mostly positive, so these two
+  columns always differ and must not trigger retraining.
 
 Current data sources:
     --source db      reviews collected by the crawler (PostgreSQL "reviews" table)
@@ -13,7 +19,7 @@ Current data sources:
 Output:
 - monitoring/reports/drift_<source>_<time>.html  (open in a browser)
 - monitoring/reports/drift_<source>_<time>.json  (summary for the retrain loop)
-- the HTML report and the drift share are also logged to MLflow
+- the HTML report and the drift scores are also logged to MLflow
   (experiment "drift-monitoring")
 
 Usage:
@@ -24,6 +30,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -45,8 +52,11 @@ SAMPLE_CATEGORIES = ["Video_Games", "Pet_Supplies"]  # not used in training
 SAMPLE_LINES_PER_CATEGORY = 1_000
 REFERENCE_SAMPLE_SIZE = 5_000
 MIN_CURRENT_ROWS = 50
-DRIFT_SHARE_THRESHOLD = 0.5  # dataset drift if half of the columns drifted
+TRIGGER_COLUMNS = ["text_length", "word_count"]
 RANDOM_SEED = 42
+
+COLUMN_PATTERN = re.compile(r"column=([^,)]+)")
+THRESHOLD_PATTERN = re.compile(r"threshold=([0-9.]+)")
 
 
 def load_reference() -> pd.DataFrame:
@@ -112,6 +122,36 @@ def drifted_share(result: dict) -> float | None:
     return None
 
 
+def column_drift(result: dict) -> dict:
+    """Per-column drift from the ValueDrift metrics.
+
+    Distance methods (Wasserstein, Jensen-Shannon): drift if score >= threshold.
+    Statistical tests (p_value, used for small samples): drift if score < threshold.
+    """
+    drift = {}
+    for metric in result.get("metrics", []):
+        label = metric_label(metric)
+        value = metric.get("value")
+        column = COLUMN_PATTERN.search(label)
+        threshold = THRESHOLD_PATTERN.search(label)
+        if not (column and threshold and isinstance(value, (int, float))):
+            continue
+        score, limit = float(value), float(threshold.group(1))
+        is_p_value = "p_value" in label.lower()
+        drifted = score < limit if is_p_value else score >= limit
+        drift[column.group(1).strip()] = {
+            "score": round(score, 4),
+            "threshold": limit,
+            "drifted": drifted,
+        }
+    return drift
+
+
+def is_drift_detected(columns: dict) -> bool:
+    """Retraining trigger: any TRIGGER_COLUMNS column drifted."""
+    return any(columns.get(name, {}).get("drifted", False) for name in TRIGGER_COLUMNS)
+
+
 def save_outputs(snapshot, summary: dict, source: str) -> Path:
     """Write the HTML report and the JSON summary (reports are not committed)."""
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -157,17 +197,16 @@ def main() -> None:
     )
 
     result = snapshot.dict()
-    for metric in result.get("metrics", []):
-        print(f"  {metric_label(metric)}: {metric.get('value')}")
-
-    share = drifted_share(result)
-    drift_detected = share is not None and share >= DRIFT_SHARE_THRESHOLD
+    columns = column_drift(result)
+    drift_detected = is_drift_detected(columns)
     summary = {
         "source": args.source,
         "reference_rows": len(reference),
         "current_rows": len(current),
-        "drifted_columns_share": share,
+        "trigger_columns": TRIGGER_COLUMNS,
         "drift_detected": drift_detected,
+        "column_drift": columns,
+        "drifted_columns_share": drifted_share(result),
         "prediction_share_reference": reference["prediction"]
         .value_counts(normalize=True)
         .round(3)
@@ -182,13 +221,20 @@ def main() -> None:
     mlflow.set_experiment(EXPERIMENT_NAME)
     with mlflow.start_run(run_name=f"drift-{args.source}"):
         mlflow.log_params({"source": args.source, "current_rows": len(current)})
-        if share is not None:
-            mlflow.log_metric("drifted_columns_share", share)
         mlflow.log_metric("drift_detected", int(drift_detected))
+        for name, info in columns.items():
+            mlflow.log_metric(f"drift_score_{name}", info["score"])
         mlflow.log_artifact(str(html_path))
 
-    print(f"\nDrifted columns share: {share}")
-    print(f"Drift detected: {drift_detected}")
+    print("\nColumn drift:")
+    for name, info in columns.items():
+        role = "TRIGGER" if name in TRIGGER_COLUMNS else "info"
+        status = "DRIFT" if info["drifted"] else "ok"
+        print(
+            f"  [{role:7}] {name:12} score={info['score']:<8} "
+            f"threshold={info['threshold']:<6} {status}"
+        )
+    print(f"\nDrift detected (retrain trigger): {drift_detected}")
     print(f"Prediction share (training): {summary['prediction_share_reference']}")
     print(f"Prediction share (current):  {summary['prediction_share_current']}")
     print(f"Report: {html_path}")

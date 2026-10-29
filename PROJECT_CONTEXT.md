@@ -5,7 +5,7 @@ Two students on a university MLOps project: Ceylin (data and model) and Bahadır
 ## 1. Goal
 End-to-end MLOps system that classifies Amazon product reviews by sentiment (negative / neutral / positive).
 - Training data: Hugging Face "McAuley-Lab/Amazon-Reviews-2023" (English, 1-5 star ratings).
-- Live data: web crawler collecting reviews from Amazon country sites (including amazon.com.tr). Used for drift monitoring, not for initial training.
+- Live data: web crawler collecting English reviews from English Amazon sites (amazon.com, amazon.co.uk, amazon.ca, amazon.com.au, amazon.in). Used for drift monitoring, not for initial training.
 No tool or language restrictions from the professor; the result is what matters.
 
 ## 2. Decisions already made
@@ -45,7 +45,7 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - Shared files (requirements.txt, docker-compose.yml, .gitignore, .pre-commit-config.yaml, PROJECT_CONTEXT.md): tell the other person before changing them.
 
 ## 7. Current status (last updated: 2026-10-29)
-- Done (Bahadır, on main): Python skeleton (FastAPI /health, routes, DB models), crawler (parser, rating, service, tests with saved Amazon / amazon.com.tr / captcha pages).
+- Done (Bahadır, on main): Python skeleton (FastAPI /health, routes, DB models), crawler (parser, rating, service, tests with saved Amazon / captcha pages).
 - Done (Ceylin, branch "data-dvc", PR #2 open): data/download_data.py builds data/raw/amazon_reviews.csv — 30,000 reviews from 10 product categories (All_Beauty, Amazon_Fashion, Appliances, Baby_Products, Cell_Phones_and_Accessories, Electronics, Home_and_Kitchen, Office_Products, Sports_and_Outdoors, Toys_and_Games), 1,000 per class per category, sampled from the first 100k reviews of each category, RANDOM_SEED=42. Columns: text, rating, label, category, source. Tracked with DVC (no DVC remote yet; regenerate with: python data/download_data.py).
 - Dropped: Cleanlab/amazon-reviews (no star ratings, no neutral class) and a Turkish dataset.
 - Done (Ceylin, branch "training"): data/validate_data.py (Great Expectations, 10 checks) and training/train.py (TF-IDF + LogisticRegression/LinearSVC, 20 Optuna trials, experiment "sentiment-training"). "sentiment-model" version 2 is "production": test macro F1 0.70 (neutral 0.59 is the weakest class). Contract test with mlflow.pyfunc.load_model("models:/sentiment-model@production") passes.

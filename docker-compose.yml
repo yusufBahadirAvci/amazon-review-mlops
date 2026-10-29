@@ -23,7 +23,7 @@ services:
       - mlops-network
 
   mlflow-server:
-    image: ghcr.io/mlflow/mlflow:v2.11.1
+    image: ghcr.io/mlflow/mlflow:v2.22.4
     container_name: mlflow-server
     restart: unless-stopped
     # Run from /mlflow so the relative SQLite file (mlflow.db) lands in the persistent volume

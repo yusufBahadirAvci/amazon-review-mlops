@@ -11,12 +11,12 @@ No tool or language restrictions from the professor; the result is what matters.
 ## 2. Decisions already made
 - Language: Python 3.12.10 (Java version kept on branch "java-backup", do not use it).
 - IDE: PyCharm, plus Claude Code inside the IDE.
-- Database: PostgreSQL 15 in Docker. MLflow server v2.11.1 in Docker (port 5000). Both in docker-compose.yml.
+- Database: PostgreSQL 15 in Docker. MLflow server v2.22.4 in Docker (port 5000). Both in docker-compose.yml.
 - Secrets: .env (never committed); .env.example shows the keys. Default DB port 5432 (Bahadır uses 5433 in his own .env).
 - Code quality: pre-commit with ruff (lint + format) and pytest.
 - Web API: FastAPI.
 - Crawler: requests + BeautifulSoup, live mode + fallback mode parsing a saved HTML page (we do NOT bypass Amazon's bot blocking).
-- pandas is pinned to 2.2.3 because mlflow 2.11.1 does not support pandas 3.
+- pandas is pinned to 2.2.3 because mlflow 2.x does not support pandas 3.
 
 ## 3. Architecture (5 stages)
 1. SETUP: GitHub repo, Docker Compose, pre-commit, Python skeleton.
@@ -38,7 +38,7 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - MLflow tracking URI: http://localhost:5000, read from the environment variable MLFLOW_TRACKING_URI.
 - Crawled reviews: PostgreSQL table "reviews" with columns including text, rating, source, marketplace, crawled_at. The drift analysis reads from this table.
 - Start with a simple, fast model (TF-IDF + LogisticRegression or LinearSVC, tuned by Optuna).
-- Client version pinned to match the server: mlflow==2.11.1.
+- Client version pinned to match the server: mlflow==2.22.4.
 
 ## 6. Git workflow
 - Never push directly to main. Work on own branches, merge through Pull Requests.
@@ -56,7 +56,7 @@ Together: auto-retrain loop (Bahadır's system triggers Ceylin's training script
 - DVC remote (Ceylin): DagsHub repo "ceylinkucuk/amazon-review-mlops-data", remote name "dagshub" (default), URL https://dagshub.com/ceylinkucuk/amazon-review-mlops-data.dvc. Data is pushed (dvc push). Credentials are set per person with "dvc remote modify dagshub --local ..." (stored in .dvc/config.local, never committed). To get the data: be added as a collaborator on the DagsHub repo, set your own token locally, then "dvc pull".
 
 - Done (Bahadır, 29 Oct): no Turkish in the project. The crawler accepts only English marketplaces (amazon.com, amazon.co.uk, amazon.ca, amazon.com.au, amazon.in; others get 400), parses ratings from the star CSS class or the English "x out of 5 stars" label only, and skips translated reviews and "reviews from other countries" with a warning (new counter skipped_foreign). Turkish test fixture removed.
-
+- MLflow upgraded (Ceylin, branch "chore/mlflow-upgrade"): server image and client 2.11.1 -> 2.22.4 (v2.22.5 has no Docker image). Tested first in a separate venv + temporary server: pip check clean, 76 tests pass, training, contract test and drift work, and a model logged with 2.11.1 still loads. Removed pins: setuptools, protobuf, opentelemetry-proto, virtualenv; pytest back to 9.2.0; pandas stays 2.2.3. Server DB migrated with "mlflow db upgrade" after a volume backup. Retrained: version 3 (same F1 0.7001) set as production manually because the promotion rule needs a strictly better score.
 - Not started: Dockerfile, CI/CD, Prometheus, /predict, auto-retrain.
 
 ## 8. Next tasks

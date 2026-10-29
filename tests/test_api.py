@@ -43,6 +43,24 @@ def test_crawl_url_rejects_non_amazon_url(api_client):
     assert set(response.json()) == {"error", "hint"}
 
 
+def test_crawl_url_rejects_turkish_marketplace(api_client):
+    response = api_client.post(
+        "/api/crawler/url", json={"url": "https://www.amazon.com.tr/dp/B0ABCDEFGH"}
+    )
+
+    assert response.status_code == 400
+    assert "amazon.com.tr" in response.json()["error"]
+    assert "amazon.co.uk" in response.json()["hint"]
+
+
+def test_import_html_rejects_turkish_source_url(api_client, reviews_html):
+    response = upload(
+        api_client, reviews_html, source_url="https://www.amazon.com.tr/dp/B0ABCDEFGH"
+    )
+
+    assert response.status_code == 400
+
+
 def test_crawl_url_missing_body_returns_400(api_client):
     response = api_client.post("/api/crawler/url", json={})
 

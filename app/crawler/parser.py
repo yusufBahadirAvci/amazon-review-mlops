@@ -9,30 +9,9 @@ from app.config import CrawlerSettings
 from app.crawler.errors import CrawlerBlockedError, InvalidCrawlInputError
 from app.crawler.rating import parse_rating
 
-AMAZON_DOMAINS = frozenset(
-    {
-        "amazon.ae",
-        "amazon.ca",
-        "amazon.co.jp",
-        "amazon.co.uk",
-        "amazon.com",
-        "amazon.com.au",
-        "amazon.com.be",
-        "amazon.com.br",
-        "amazon.com.mx",
-        "amazon.com.tr",
-        "amazon.de",
-        "amazon.eg",
-        "amazon.es",
-        "amazon.fr",
-        "amazon.in",
-        "amazon.it",
-        "amazon.nl",
-        "amazon.pl",
-        "amazon.sa",
-        "amazon.se",
-        "amazon.sg",
-    }
+# Team decision: English reviews only, so only English-language marketplaces are crawled
+ENGLISH_MARKETPLACES = frozenset(
+    {"amazon.com", "amazon.co.uk", "amazon.ca", "amazon.com.au", "amazon.in"}
 )
 
 _ASIN = re.compile(r"/(?:dp|gp/product|product-reviews|gp/aw/d)/([A-Z0-9]{10})(?=[/?#]|$)", re.I)
@@ -58,22 +37,25 @@ class ParsedReview:
     text: str | None
     rating: int | None
     review_date: str | None
+    # Set when the review must not be stored (translated or from another country)
+    skip_reason: str | None = None
 
 
 def parse_amazon_url(url: str) -> AmazonUrl:
-    """Validate an http(s) Amazon URL and extract the marketplace and ASIN."""
+    """Validate an http(s) URL on an English Amazon marketplace; extract marketplace and ASIN."""
     url = url.strip()
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
         raise InvalidCrawlInputError(
             "URL must start with http:// or https://",
-            hint="Example: https://www.amazon.com.tr/product-reviews/B0EXAMPLE1",
+            hint="Example: https://www.amazon.com/product-reviews/B0EXAMPLE1",
         )
     marketplace = (parts.hostname or "").lower().removeprefix("www.")
-    if marketplace not in AMAZON_DOMAINS:
+    if marketplace not in ENGLISH_MARKETPLACES:
         raise InvalidCrawlInputError(
-            f"Not a supported Amazon domain: {parts.hostname or url}",
-            hint="Supported domains: " + ", ".join(sorted(AMAZON_DOMAINS)),
+            f"Not a supported Amazon marketplace: {parts.hostname or url}",
+            hint="Only English marketplaces are supported: "
+            + ", ".join(sorted(ENGLISH_MARKETPLACES)),
         )
     match = _ASIN.search(parts.path)
     return AmazonUrl(url, marketplace, match.group(1).upper() if match else None)
@@ -94,12 +76,25 @@ def is_blocked_page(soup: BeautifulSoup) -> bool:
 
 
 def _parse_review(element: Tag, settings: CrawlerSettings) -> ParsedReview:
+    body = element.select_one(settings.text_selector)
     return ParsedReview(
         title=_title(element.select_one(settings.title_selector)) or None,
-        text=_body(element.select_one(settings.text_selector)),
+        text=_body(body),
         rating=parse_rating(element.select_one(settings.rating_selector)),
         review_date=_text(element.select_one(settings.date_selector)) or None,
+        skip_reason=_skip_reason(element, body, settings),
     )
+
+
+def _skip_reason(element: Tag, body: Tag | None, settings: CrawlerSettings) -> str | None:
+    if element.css.closest(settings.foreign_section_selector) is not None:
+        return "from the 'reviews from other countries' section"
+    if element.select_one(settings.translated_selector) is not None:
+        return "marked as translated"
+    lang = (body.get("lang") or "") if body is not None else ""
+    if lang and not lang.lower().startswith("en"):
+        return f"not in English (lang={lang})"
+    return None
 
 
 def _title(element: Tag | None) -> str:

@@ -49,6 +49,13 @@ class CrawlerSettings(BaseSettings):
     title_selector: str = "[data-hook=review-title], [data-hook=reviewTitle]"
     text_selector: str = "[data-hook=reviewRichContentContainer], span[data-hook=review-body]"
     date_selector: str = "span[data-hook=review-date]"
+    # Reviews matching these are skipped: we only store reviews written in English
+    # on the marketplace that was crawled
+    translated_selector: str = (
+        "[data-hook=translateButton], [data-hook=translationInfo], "
+        "[data-hook=seeOriginalReviewLink]"
+    )
+    foreign_section_selector: str = "#cm-cr-global-review-list"
 
 
 @lru_cache

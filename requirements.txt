@@ -31,3 +31,8 @@ mlflow==2.11.1
 scikit-learn==1.9.1
 optuna==5.0.0
 setuptools==80.9.0  # mlflow 2.11.1 needs pkg_resources
+
+# Monitoring (Ceylin)
+evidently==0.7.23
+protobuf==4.25.9  # mlflow 2.11.1 needs protobuf<5
+opentelemetry-proto==1.27.0  # last version compatible with protobuf 4
